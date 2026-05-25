@@ -178,7 +178,7 @@ The AI integration will make the system smarter, more accurate, and more efficie
 
 ## Team Name
 
-**CSE4204-[Your Section]-T[Your Team Number]**
+*CSE4204-8C-T03*
 
 ## Project Title
 
