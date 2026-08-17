@@ -19,8 +19,8 @@ function GoogleIcon() {
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState('zawad@gmail.com');
+  const [password, setPassword] = useState('12345678');
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -30,18 +30,20 @@ export default function LoginPage() {
     try {
       setSubmitting(true);
 
-      const response = await axios.post('/api/signin', {
-        email,
-        password
-      }
+      const response = await axios.post("/api/login",
+        {
+          email,
+          password
+        }
       );
 
       console.log(response);
 
-      setTimeout(() => router.push('/dashboard'), 400);
+      router.push('/dashboard');
 
     } catch (error) {
       console.log(error);
+      // toast message
     }
 
     setSubmitting(false);

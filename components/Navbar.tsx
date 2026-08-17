@@ -12,6 +12,7 @@ import {
   LogOut,
   CalendarCheck,
 } from 'lucide-react';
+import axios from 'axios';
 
 const NAV_LINKS = [
   { href: '/dashboard', label: 'Dashboard' },
@@ -26,10 +27,35 @@ export default function Navbar() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+
   const isActive = (href: string) =>
     href === '/dashboard' ? pathname === '/dashboard' : pathname === href;
 
+
+
+  async function user() {
+    try {
+      const response = await axios.get("/api/me");
+
+      console.log(response);
+
+      if (response.data?.name && response.data?.email) {
+        setName(response.data?.name);
+        setEmail(response.data?.email);
+      }
+
+    } catch (error) {
+      console.log(error);
+    }
+  }
+
+
   useEffect(() => {
+
+    user();
+
     const onScroll = () => setScrolled(window.scrollY > 8);
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
@@ -65,11 +91,10 @@ export default function Navbar() {
               <Link
                 key={l.label}
                 href={l.href}
-                className={`relative text-sm ps-transition ${
-                  activeLink
-                    ? 'text-ps-primary font-semibold'
-                    : 'text-ps-text-muted hover:text-white'
-                }`}
+                className={`relative text-sm ps-transition ${activeLink
+                  ? 'text-ps-primary font-semibold'
+                  : 'text-ps-text-muted hover:text-white'
+                  }`}
               >
                 {l.label}
                 {activeLink && (
@@ -94,7 +119,7 @@ export default function Navbar() {
               className="w-10 h-10 rounded-full bg-gradient-to-br from-ps-primary to-ps-primary-hover text-white font-semibold flex items-center justify-center ps-transition hover:ps-glow"
               aria-label="Account menu"
             >
-              JD
+              {name[0] ?? "JD"}
             </button>
             {menuOpen && (
               <>
@@ -104,7 +129,7 @@ export default function Navbar() {
                 />
                 <div className="absolute right-0 mt-2 w-48 ps-card p-2 z-50 animate-scale-in">
                   <div className="px-3 py-2 text-xs text-ps-text-muted border-b border-white/5 mb-1">
-                    Signed in as <span className="text-white">jane@parksense.ai</span>
+                    Signed in as <span className="text-white">{email}</span>
                   </div>
                   <Link href="/dashboard" onClick={() => setMenuOpen(false)} className="flex items-center gap-2 px-3 py-2 text-sm text-ps-text-muted hover:text-white hover:bg-white/5 rounded-md ps-transition">
                     <UserIcon size={15} /> Profile
@@ -151,16 +176,15 @@ export default function Navbar() {
                     key={l.label}
                     href={l.href}
                     onClick={() => setDrawerOpen(false)}
-                    className={`px-3 py-3 rounded-md text-sm ps-transition ${
-                      activeLink
-                        ? 'text-ps-primary bg-ps-primary/10 font-semibold'
-                        : 'text-ps-text-muted hover:text-white hover:bg-white/5'
-                    }`}
+                    className={`px-3 py-3 rounded-md text-sm ps-transition ${activeLink
+                      ? 'text-ps-primary bg-ps-primary/10 font-semibold'
+                      : 'text-ps-text-muted hover:text-white hover:bg-white/5'
+                      }`}
                   >
                     {l.label}
                   </Link>
                 );
-})}
+              })}
             </div>
             <div className="mt-auto flex flex-col gap-2">
               <Link href="/login" className="h-11 rounded-btn border border-ps-primary/40 text-ps-primary text-sm font-semibold flex items-center justify-center hover:bg-ps-primary/10 ps-transition">
