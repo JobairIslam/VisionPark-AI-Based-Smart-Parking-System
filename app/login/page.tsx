@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Mail, Lock, Eye, EyeOff, ShieldCheck } from 'lucide-react';
+import axios from 'axios';
 
 function GoogleIcon() {
   return (
@@ -23,10 +24,28 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setSubmitting(true);
-    setTimeout(() => router.push('/dashboard'), 400);
+
+    try {
+      setSubmitting(true);
+
+      const response = await axios.post('/api/signin', {
+        email,
+        password
+      }
+      );
+
+      console.log(response);
+
+      setTimeout(() => router.push('/dashboard'), 400);
+
+    } catch (error) {
+      console.log(error);
+    }
+
+    setSubmitting(false);
+
   }
 
   return (
