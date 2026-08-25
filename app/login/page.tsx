@@ -19,8 +19,8 @@ function GoogleIcon() {
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('zawad@gmail.com');
-  const [password, setPassword] = useState('12345678');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 

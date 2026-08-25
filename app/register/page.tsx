@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Mail, Lock, Eye, EyeOff, User } from 'lucide-react';
+import axios from 'axios';
 
 function GoogleIcon() {
   return (
@@ -42,11 +43,32 @@ export default function RegisterPage() {
     score <= 1 ? '#FF4D4F' : score === 2 ? '#FFB800' : '#00D97E';
   const barWidth = `${(score / 4) * 100}%`;
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (password !== confirm) return;
-    setSubmitting(true);
-    setTimeout(() => router.push('/dashboard'), 400);
+
+    try {
+      setSubmitting(true);
+
+      const response = await axios.post("/api/register",
+        {
+          name,
+          email,
+          password,
+          password_confirmation: confirm
+        }
+      );
+
+      console.log(response);
+
+      router.push('/dashboard');
+
+    } catch (error) {
+      console.log(error);
+      // toast message
+    }
+
+    setSubmitting(false);
   }
 
   return (
