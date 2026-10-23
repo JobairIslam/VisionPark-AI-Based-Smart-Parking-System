@@ -1,27 +1,14 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Calendar, Clock, CalendarX, CircleParking } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import axios from 'axios';
+import { Calendar, Clock, CalendarX } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
-import type { Booking, BookingStatus } from '@/lib/types';
-
-interface SampleBooking extends Booking {
-  zone: string;
-  time: string;
-}
-
-const SAMPLE_BOOKINGS: SampleBooking[] = [
-  { spotId: 'A-04', zone: 'A', date: 'Jul 05, 2026', time: '14:30', duration: 2, cost: 5.0, status: 'active' },
-  { spotId: 'B-12', zone: 'B', date: 'Jul 05, 2026', time: '09:15', duration: 3, cost: 7.5, status: 'active' },
-  { spotId: 'A-11', zone: 'A', date: 'Jul 03, 2026', time: '11:00', duration: 1, cost: 2.5, status: 'completed' },
-  { spotId: 'B-07', zone: 'B', date: 'Jul 02, 2026', time: '16:45', duration: 4, cost: 10.0, status: 'completed' },
-  { spotId: 'A-19', zone: 'A', date: 'Jun 30, 2026', time: '08:20', duration: 2, cost: 5.0, status: 'completed' },
-  { spotId: 'B-03', zone: 'B', date: 'Jun 28, 2026', time: '13:10', duration: 3, cost: 7.5, status: 'completed' },
-  { spotId: 'A-08', zone: 'A', date: 'Jun 25, 2026', time: '10:00', duration: 1, cost: 2.5, status: 'cancelled' },
-  { spotId: 'B-15', zone: 'B', date: 'Jun 22, 2026', time: '18:30', duration: 2, cost: 5.0, status: 'cancelled' },
-];
+import { mapBooking } from '@/lib/mappers';
+import type { ApiBooking, Booking, BookingStatus } from '@/lib/types';
 
 type Tab = 'all' | BookingStatus;
 
@@ -29,7 +16,6 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'all', label: 'All' },
   { key: 'active', label: 'Active' },
   { key: 'completed', label: 'Completed' },
-  { key: 'cancelled', label: 'Cancelled' },
 ];
 
 const STATUS_STYLE: Record<BookingStatus, string> = {
@@ -48,8 +34,36 @@ const EMPTY_SUBTITLE: Record<Tab, string> = {
 };
 
 export default function MyBookingsPage() {
+  const router = useRouter();
   const [tab, setTab] = useState<Tab>('all');
-  const [bookings, setBookings] = useState<SampleBooking[]>(SAMPLE_BOOKINGS);
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const load = useCallback(async () => {
+    setError('');
+    try {
+      const res = await axios.get('/api/bookings');
+      const list = ((res.data.bookings || []) as ApiBooking[]).map(mapBooking);
+      setBookings(list);
+    } catch (e: unknown) {
+      if (axios.isAxiosError(e) && e.response?.status === 401) {
+        router.push('/login');
+        return;
+      }
+      setError(
+        axios.isAxiosError(e) && e.response?.data?.message
+          ? String(e.response.data.message)
+          : 'Failed to load bookings'
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [router]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const filtered = useMemo(() => {
     const list = tab === 'all' ? bookings : bookings.filter((b) => b.status === tab);
@@ -62,17 +76,10 @@ export default function MyBookingsPage() {
     .filter((b) => b.status !== 'cancelled')
     .reduce((sum, b) => sum + b.cost, 0);
 
-  function cancelBooking(spotId: string) {
-    setBookings((prev) =>
-      prev.map((b) => (b.spotId === spotId ? { ...b, status: 'cancelled' as const } : b))
-    );
-  }
-
   return (
     <div className="min-h-screen bg-ps-bg">
       <Navbar />
       <main className="pt-16 max-w-7xl mx-auto px-4 sm:px-6 pb-10">
-        {/* Header */}
         <section className="mt-4 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
           <div>
             <h1 className="text-white font-bold text-[28px] leading-tight">My Bookings</h1>
@@ -93,7 +100,6 @@ export default function MyBookingsPage() {
           </div>
         </section>
 
-        {/* Filter tabs */}
         <div className="mt-6 flex gap-2 overflow-x-auto pb-1 no-scrollbar">
           {TABS.map((t) => (
             <button
@@ -110,9 +116,12 @@ export default function MyBookingsPage() {
           ))}
         </div>
 
-        {/* Bookings list */}
         <div className="mt-6">
-          {filtered.length === 0 ? (
+          {loading ? (
+            <p className="text-ps-text-muted text-sm">Loading bookings…</p>
+          ) : error ? (
+            <p className="text-ps-occupied text-sm">{error}</p>
+          ) : filtered.length === 0 ? (
             <div className="ps-card p-12 flex flex-col items-center text-center animate-fade-in">
               <CalendarX className="text-ps-text-muted mb-4" size={40} strokeWidth={1.5} />
               <h3 className="text-white font-semibold text-lg">No bookings found</h3>
@@ -130,20 +139,24 @@ export default function MyBookingsPage() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {filtered.map((b, i) => (
                 <div
-                  key={`${b.spotId}-${i}`}
+                  key={b.id}
                   className="ps-card p-5 flex flex-col sm:flex-row sm:items-center gap-4 animate-fade-in hover:border-ps-primary/40 hover:ps-glow ps-transition"
                   style={{ animationDelay: `${Math.min(i * 40, 400)}ms` }}
                 >
-                  {/* Spot badge */}
                   <div className="w-14 h-14 shrink-0 rounded-xl bg-ps-primary text-white font-bold text-base flex items-center justify-center">
                     {b.spotId}
                   </div>
 
-                  {/* Middle */}
                   <div className="flex-1 min-w-0">
                     <p className="text-white font-bold text-base">
-                      {b.spotId} <span className="text-ps-text-muted font-normal text-sm">· Zone {b.zone}</span>
+                      {b.spotId}{' '}
+                      <span className="text-ps-text-muted font-normal text-sm">· Zone {b.zone}</span>
                     </p>
+                    {b.vehicleNumber && (
+                      <p className="text-ps-text-muted text-xs mt-1">
+                        {b.vehicleName} · {b.vehicleNumber}
+                      </p>
+                    )}
                     <p className="text-ps-text-muted text-xs mt-1.5 flex items-center gap-1.5">
                       <Calendar size={13} /> {b.date} · {b.time}
                     </p>
@@ -152,7 +165,6 @@ export default function MyBookingsPage() {
                     </p>
                   </div>
 
-                  {/* Right */}
                   <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-3 sm:gap-2">
                     <p className="text-white font-bold text-lg">${b.cost.toFixed(2)}</p>
                     <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-pill ${STATUS_STYLE[b.status]}`}>
@@ -160,12 +172,9 @@ export default function MyBookingsPage() {
                     </span>
                     <div className="mt-1">
                       {b.status === 'active' && (
-                        <button
-                          onClick={() => cancelBooking(b.spotId)}
-                          className="h-9 px-3 rounded-btn border border-ps-occupied/50 text-ps-occupied text-xs font-semibold hover:bg-ps-occupied/10 ps-transition"
-                        >
-                          Cancel Booking
-                        </button>
+                        <span className="text-[11px] text-ps-text-muted">
+                          Cancel not available yet
+                        </span>
                       )}
                       {b.status === 'completed' && (
                         <Link
@@ -174,14 +183,6 @@ export default function MyBookingsPage() {
                         >
                           Book Again
                         </Link>
-                      )}
-                      {b.status === 'cancelled' && (
-                        <button
-                          disabled
-                          className="h-9 px-3 rounded-btn bg-white/5 text-ps-text-muted text-xs font-semibold cursor-not-allowed"
-                        >
-                          Cancelled
-                        </button>
                       )}
                     </div>
                   </div>

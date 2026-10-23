@@ -7,9 +7,8 @@ export type FilterKey = 'all' | SpotStatus;
 
 const PILLS: { key: FilterKey; label: string }[] = [
   { key: 'all', label: 'All Spots' },
-  { key: 'available', label: 'Available' },
-  { key: 'occupied', label: 'Occupied' },
-  { key: 'reserved', label: 'Reserved' },
+  { key: 'available', label: 'Free' },
+  { key: 'occupied', label: 'Booked' },
 ];
 
 interface Props {

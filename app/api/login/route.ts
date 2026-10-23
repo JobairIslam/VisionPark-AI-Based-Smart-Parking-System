@@ -1,37 +1,36 @@
-import axios from "axios";
-import { cookies } from 'next/headers';
-import { NextResponse } from "next/server";
+import { NextResponse } from 'next/server';
+import { laravelErrorMessage, laravelRequest } from '@/lib/laravel';
 
+export async function POST(request: Request) {
+  const { email, password } = await request.json();
 
+  if (!email || !password) {
+    return NextResponse.json(
+      { message: 'Fill up the email and password' },
+      { status: 400 }
+    );
+  }
 
-export async function POST(resquest: Request) {
+  try {
+    const response = await laravelRequest<{ token: string; user: unknown }>('post', '/api/signin', {
+      data: { email, password },
+    });
 
-    const { email, password } = await resquest.json();
-
-    if (!email || !password) {
-        return NextResponse.json({ message: "Fill up the email and password" });
+    if (response.status >= 400) {
+      return NextResponse.json(
+        { message: laravelErrorMessage(response.data, 'Login failed') },
+        { status: response.status }
+      );
     }
 
-    try {
-
-        const response = await axios.post("http://127.0.0.1:8000/api/signin",
-            {
-                email,
-                password
-            }
-        );
-
-        await cookies().set('auth_token', response.data.token);
-
-        console.log(response.data);
-
-        return NextResponse.json({ user: response.data.user });
-
-    } catch (error) {
-        console.log(error);
-
-        return NextResponse.json(error);
-        // toast message
-    }
-
+    const res = NextResponse.json({ user: response.data.user });
+    res.cookies.set('auth_token', response.data.token, {
+      httpOnly: true,
+      sameSite: 'lax',
+      path: '/',
+    });
+    return res;
+  } catch {
+    return NextResponse.json({ message: 'Server error' }, { status: 500 });
+  }
 }

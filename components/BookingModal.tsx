@@ -1,9 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { X, Clock, DollarSign, CheckCircle2 } from 'lucide-react';
-import type { ParkingSpot } from '@/lib/types';
+import { X, Clock, DollarSign, CheckCircle2, Car } from 'lucide-react';
+import axios from 'axios';
+import type { ParkingSpot, Vehicle } from '@/lib/types';
 import { HOURLY_RATE } from '@/lib/parkingData';
+import { mapVehicle } from '@/lib/mappers';
 
 interface Props {
   spot: ParkingSpot | null;
@@ -17,17 +19,42 @@ export default function BookingModal({ spot, onClose, onConfirm }: Props) {
   const [duration, setDuration] = useState(1);
   const [now, setNow] = useState<string>('');
   const [toast, setToast] = useState(false);
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [vehicleId, setVehicleId] = useState<number | ''>('');
+  const [showNewVehicle, setShowNewVehicle] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newNumber, setNewNumber] = useState('');
+  const [savingVehicle, setSavingVehicle] = useState(false);
 
   useEffect(() => {
-    if (spot) {
-      setDuration(1);
-      setNow(
-        new Date().toLocaleString(undefined, {
-          dateStyle: 'medium',
-          timeStyle: 'short',
-        })
-      );
-    }
+    if (!spot) return;
+    setDuration(1);
+    setError('');
+    setToast(false);
+    setShowNewVehicle(false);
+    setNewName('');
+    setNewNumber('');
+    setNow(
+      new Date().toLocaleString(undefined, {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      })
+    );
+
+    (async () => {
+      try {
+        const res = await axios.get('/api/vehicles');
+        const list = (res.data.vehicles || []).map(mapVehicle);
+        setVehicles(list);
+        setVehicleId(list[0]?.id ?? '');
+        if (list.length === 0) setShowNewVehicle(true);
+      } catch {
+        setVehicles([]);
+        setShowNewVehicle(true);
+      }
+    })();
   }, [spot]);
 
   useEffect(() => {
@@ -43,13 +70,69 @@ export default function BookingModal({ spot, onClose, onConfirm }: Props) {
 
   const cost = duration * HOURLY_RATE;
 
-  function confirm() {
-    onConfirm(spot!, duration, cost);
-    setToast(true);
-    setTimeout(() => {
-      setToast(false);
-      onClose();
-    }, 1500);
+  async function createVehicle() {
+    if (!newName.trim() || !newNumber.trim()) {
+      setError('Enter vehicle name and number');
+      return;
+    }
+    setSavingVehicle(true);
+    setError('');
+    try {
+      const res = await axios.post('/api/vehicles', {
+        name: newName.trim(),
+        number: newNumber.trim(),
+      });
+      const created = mapVehicle(res.data.vehicle);
+      setVehicles((prev) => [...prev, created]);
+      setVehicleId(created.id);
+      setShowNewVehicle(false);
+      setNewName('');
+      setNewNumber('');
+    } catch (e: unknown) {
+      const msg =
+        axios.isAxiosError(e) && e.response?.data?.message
+          ? String(e.response.data.message)
+          : 'Failed to create vehicle';
+      setError(msg);
+    } finally {
+      setSavingVehicle(false);
+    }
+  }
+
+  async function confirm() {
+    if (!vehicleId) {
+      setError('Select or create a vehicle first');
+      return;
+    }
+
+    setSubmitting(true);
+    setError('');
+
+    const entry = new Date();
+    const exit = new Date(entry.getTime() + duration * 60 * 60 * 1000);
+
+    try {
+      await axios.post(`/api/booking/${spot!.slotId}`, {
+        vehicle_id: vehicleId,
+        entry_time: entry.toISOString(),
+        exit_time: exit.toISOString(),
+      });
+
+      onConfirm(spot!, duration, cost);
+      setToast(true);
+      setTimeout(() => {
+        setToast(false);
+        onClose();
+      }, 1200);
+    } catch (e: unknown) {
+      const msg =
+        axios.isAxiosError(e) && e.response?.data?.message
+          ? String(e.response.data.message)
+          : 'Booking failed';
+      setError(msg);
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -61,7 +144,7 @@ export default function BookingModal({ spot, onClose, onConfirm }: Props) {
       >
         <div
           onClick={(e) => e.stopPropagation()}
-          className="w-full sm:max-w-[400px] ps-card ps-glow p-6 sm:p-8 rounded-t-2xl sm:rounded-2xl animate-scale-in"
+          className="w-full sm:max-w-[400px] ps-card ps-glow p-6 sm:p-8 rounded-t-2xl sm:rounded-2xl animate-scale-in max-h-[90vh] overflow-y-auto"
         >
           <div className="flex items-center justify-between mb-5">
             <h3 className="text-white font-bold text-lg">
@@ -81,11 +164,73 @@ export default function BookingModal({ spot, onClose, onConfirm }: Props) {
               {spot.id}
             </span>
             <span className="text-xs font-semibold px-2.5 py-1 rounded-pill bg-[rgba(0,217,126,0.15)] text-ps-available">
-              Available
+              Free
             </span>
           </div>
 
           <p className="text-ps-text-muted text-xs mb-5">{now}</p>
+
+          <div className="mb-5">
+            <p className="text-ps-text-muted text-xs mb-2 flex items-center gap-1.5">
+              <Car size={13} /> Vehicle
+            </p>
+            {vehicles.length > 0 && !showNewVehicle && (
+              <select
+                value={vehicleId}
+                onChange={(e) => setVehicleId(Number(e.target.value))}
+                className="ps-input w-full h-10 text-sm text-white mb-2"
+              >
+                {vehicles.map((v) => (
+                  <option key={v.id} value={v.id} className="bg-ps-card text-white">
+                    {v.name} ({v.number})
+                  </option>
+                ))}
+              </select>
+            )}
+            {showNewVehicle ? (
+              <div className="space-y-2">
+                <input
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  placeholder="Vehicle name"
+                  className="ps-input w-full h-10 text-sm text-white placeholder:text-ps-text-muted"
+                />
+                <input
+                  value={newNumber}
+                  onChange={(e) => setNewNumber(e.target.value)}
+                  placeholder="Plate number"
+                  className="ps-input w-full h-10 text-sm text-white placeholder:text-ps-text-muted"
+                />
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={savingVehicle}
+                    onClick={createVehicle}
+                    className="flex-1 h-9 rounded-btn bg-ps-primary text-white text-xs font-semibold hover:bg-ps-primary-hover disabled:opacity-60"
+                  >
+                    {savingVehicle ? 'Saving…' : 'Save vehicle'}
+                  </button>
+                  {vehicles.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowNewVehicle(false)}
+                      className="h-9 px-3 rounded-btn border border-white/10 text-ps-text-muted text-xs"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowNewVehicle(true)}
+                className="text-ps-primary text-xs font-semibold hover:text-ps-primary-hover"
+              >
+                + Add another vehicle
+              </button>
+            )}
+          </div>
 
           <div className="mb-5">
             <p className="text-ps-text-muted text-xs mb-2 flex items-center gap-1.5">
@@ -117,11 +262,16 @@ export default function BookingModal({ spot, onClose, onConfirm }: Props) {
             </span>
           </div>
 
+          {error && (
+            <p className="text-ps-occupied text-xs mb-3">{error}</p>
+          )}
+
           <button
             onClick={confirm}
-            className="w-full h-12 rounded-btn bg-ps-primary text-white font-semibold text-sm hover:bg-ps-primary-hover hover:ps-glow ps-transition"
+            disabled={submitting}
+            className="w-full h-12 rounded-btn bg-ps-primary text-white font-semibold text-sm hover:bg-ps-primary-hover hover:ps-glow ps-transition disabled:opacity-60"
           >
-            Confirm Booking
+            {submitting ? 'Booking…' : 'Confirm Booking'}
           </button>
           <button
             onClick={onClose}

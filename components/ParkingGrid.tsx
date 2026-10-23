@@ -19,14 +19,16 @@ export default function ParkingGrid({ spots, filter, query, onBook }: Props) {
     return true;
   });
 
+  const zones = Array.from(new Set(filtered.map((s) => s.zone))).sort();
+
   return (
     <section>
       <div className="flex items-center gap-2 mb-1">
         <MapPin className="text-ps-primary" size={18} />
-        <h2 className="text-white font-bold text-lg">Parking Lot — Zone A</h2>
+        <h2 className="text-white font-bold text-lg">Parking Lot</h2>
       </div>
       <p className="text-ps-text-muted text-sm mb-4">
-        Select an available spot to reserve it
+        Select a free spot to book it. Numbers come from the parking API.
       </p>
 
       {filtered.length === 0 ? (
@@ -34,16 +36,28 @@ export default function ParkingGrid({ spots, filter, query, onBook }: Props) {
           No spots match your filter.
         </div>
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
-          {filtered.map((spot, i) => (
-            <div
-              key={spot.id}
-              className="animate-fade-in"
-              style={{ animationDelay: `${Math.min(i * 30, 600)}ms` }}
-            >
-              <ParkingSpotCard spot={spot} onBook={onBook} />
-            </div>
-          ))}
+        <div className="space-y-8">
+          {zones.map((zone) => {
+            const zoneSpots = filtered.filter((s) => s.zone === zone);
+            return (
+              <div key={zone}>
+                <h3 className="text-white font-semibold text-sm mb-3">
+                  Zone {zone}
+                </h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+                  {zoneSpots.map((spot, i) => (
+                    <div
+                      key={spot.slotId}
+                      className="animate-fade-in"
+                      style={{ animationDelay: `${Math.min(i * 30, 600)}ms` }}
+                    >
+                      <ParkingSpotCard spot={spot} onBook={onBook} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </section>

@@ -1,35 +1,31 @@
-import axios, { AxiosError } from "axios";
-import { cookies } from "next/headers";
-import { NextResponse } from "next/server";
+import { NextResponse } from 'next/server';
+import { laravelErrorMessage, laravelRequest } from '@/lib/laravel';
 
+export async function GET() {
+  try {
+    const response = await laravelRequest<{
+      id: number;
+      name: string;
+      email: string;
+    }>('get', '/api/user', { auth: true });
 
-export async function GET(request: Request) {
-
-    const cookieStore = cookies();
-    const token = cookieStore.get('auth_token');
-
-    if (!token?.value) {
-        return NextResponse.json({ message: "Token cookie not found" }, { status: 404 });
+    if (response.status >= 400) {
+      return NextResponse.json(
+        { message: laravelErrorMessage(response.data, 'Unauthorized') },
+        { status: response.status }
+      );
     }
 
-    try {
-        const response = await axios.get("http://127.0.0.1:8000/api/user", {
-            'headers': {
-                'Authorization': "Bearer " + token.value
-            }
-        });
-
-        console.log(response.data);
-
-
-        return NextResponse.json(response.data);
-
-    } catch (e) {
-
-        const error = e as AxiosError;
-
-        console.log(error);
-        return NextResponse.json(error, { status: error.status });
+    return NextResponse.json({
+      name: response.data.name,
+      email: response.data.email,
+      id: response.data.id,
+    });
+  } catch (e) {
+    const err = e as Error & { status?: number };
+    if (err.status === 401) {
+      return NextResponse.json({ message: 'Token cookie not found' }, { status: 401 });
     }
-
+    return NextResponse.json({ message: 'Server error' }, { status: 500 });
+  }
 }

@@ -42,9 +42,9 @@ export default function RecentActivity({ bookings }: Props) {
                 </tr>
               </thead>
               <tbody>
-                {bookings.map((b, i) => (
+                {bookings.map((b) => (
                   <tr
-                    key={i}
+                    key={b.id}
                     className="border-b border-white/5 last:border-0 hover:bg-white/[0.02] ps-transition"
                   >
                     <td className="px-4 py-3 text-white font-semibold">{b.spotId}</td>

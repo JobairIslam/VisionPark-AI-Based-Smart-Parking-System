@@ -1,6 +1,8 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import axios from 'axios';
 import {
   Calendar,
   Clock,
@@ -13,47 +15,9 @@ import {
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
-import type { BookingStatus } from '@/lib/types';
+import { mapBooking } from '@/lib/mappers';
+import type { ApiBooking, Booking, BookingStatus } from '@/lib/types';
 
-interface HistoryRecord {
-  spotId: string;
-  zone: string;
-  date: string;
-  time: string;
-  duration: number;
-  cost: number;
-  status: BookingStatus;
-}
-
-function buildHistory(): HistoryRecord[] {
-  const zones = ['A', 'B'];
-  const records: HistoryRecord[] = [];
-  // Deterministic spread across last 30 days
-  const offsets = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 14, 15, 17, 19, 21, 23, 26, 29];
-  const times = ['08:15', '09:30', '10:45', '11:20', '13:00', '14:10', '15:35', '16:50', '18:05', '19:30'];
-  for (let i = 0; i < 20; i++) {
-    const dayOffset = offsets[i];
-    const d = new Date(2026, 5, 5);
-    d.setDate(d.getDate() - dayOffset);
-    const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
-    const zone = zones[i % 2];
-    const spotNum = ((i * 7) % 20) + 1;
-    const duration = (i % 4) + 1;
-    const status: BookingStatus = i % 5 === 4 ? 'cancelled' : 'completed';
-    records.push({
-      spotId: `${zone}-${String(spotNum).padStart(2, '0')}`,
-      zone,
-      date: dateStr,
-      time: times[i % times.length],
-      duration,
-      cost: duration * 2.5,
-      status,
-    });
-  }
-  return records;
-}
-
-const ALL_HISTORY: HistoryRecord[] = buildHistory();
 const PAGE_SIZE = 6;
 
 const STATUS_STYLE: Record<BookingStatus, string> = {
@@ -63,16 +27,47 @@ const STATUS_STYLE: Record<BookingStatus, string> = {
 };
 
 export default function HistoryPage() {
+  const router = useRouter();
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [applied, setApplied] = useState<{ from: string; to: string }>({ from: '', to: '' });
   const [page, setPage] = useState(1);
   const [toast, setToast] = useState(false);
+  const [history, setHistory] = useState<Booking[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const load = useCallback(async () => {
+    setError('');
+    try {
+      const res = await axios.get('/api/bookings');
+      const list = ((res.data.bookings || []) as ApiBooking[])
+        .map(mapBooking)
+        .filter((b) => b.status === 'completed');
+      setHistory(list);
+    } catch (e: unknown) {
+      if (axios.isAxiosError(e) && e.response?.status === 401) {
+        router.push('/login');
+        return;
+      }
+      setError(
+        axios.isAxiosError(e) && e.response?.data?.message
+          ? String(e.response.data.message)
+          : 'Failed to load history'
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [router]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const filtered = useMemo(() => {
-    return ALL_HISTORY.filter((r) => {
+    return history.filter((r) => {
       if (!applied.from && !applied.to) return true;
-      const rec = new Date(r.date);
+      const rec = new Date(r.entryTime);
       if (applied.from) {
         const f = new Date(applied.from);
         if (rec < f) return false;
@@ -84,7 +79,7 @@ export default function HistoryPage() {
       }
       return true;
     });
-  }, [applied]);
+  }, [applied, history]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
@@ -110,11 +105,24 @@ export default function HistoryPage() {
   }
 
   function exportCsv() {
-    setToast(true);
-    setTimeout(() => setToast(false), 3000);
+    if (filtered.length === 0) {
+      setToast(true);
+      setTimeout(() => setToast(false), 2500);
+      return;
+    }
+    const header = 'Spot,Zone,Date,Time,Duration,Cost,Status';
+    const rows = filtered.map(
+      (r) =>
+        `${r.spotId},${r.zone},${r.date},${r.time},${r.duration},${r.cost.toFixed(2)},${r.status}`
+    );
+    const blob = new Blob([[header, ...rows].join('\n')], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'parking-history.csv';
+    a.click();
+    URL.revokeObjectURL(url);
   }
-
-  const maxHours = Math.max(...ALL_HISTORY.map((r) => r.duration), 1);
 
   return (
     <div className="min-h-screen bg-ps-bg">
@@ -167,7 +175,7 @@ export default function HistoryPage() {
               <Hash className="text-ps-primary" size={22} />
             </div>
             <div className="mt-4 h-1.5 w-full rounded-full bg-white/10 overflow-hidden">
-              <div className="h-full rounded-full bg-ps-primary" style={{ width: `${(totalSessions / ALL_HISTORY.length) * 100}%` }} />
+              <div className="h-full rounded-full bg-ps-primary" style={{ width: `${history.length ? (totalSessions / history.length) * 100 : 0}%` }} />
             </div>
           </div>
           <div className="ps-card p-5 animate-fade-in" style={{ animationDelay: '120ms' }}>
@@ -179,7 +187,7 @@ export default function HistoryPage() {
               <Timer className="text-ps-available" size={22} />
             </div>
             <div className="mt-4 h-1.5 w-full rounded-full bg-white/10 overflow-hidden">
-              <div className="h-full rounded-full bg-ps-available" style={{ width: `${(totalHours / (ALL_HISTORY.length * 4)) * 100}%` }} />
+              <div className="h-full rounded-full bg-ps-available" style={{ width: `${Math.min(100, (totalHours / Math.max(history.length * 4, 1)) * 100)}%` }} />
             </div>
           </div>
           <div className="ps-card p-5 animate-fade-in" style={{ animationDelay: '180ms' }}>
@@ -191,7 +199,7 @@ export default function HistoryPage() {
               <DollarSign className="text-ps-warning" size={22} />
             </div>
             <div className="mt-4 h-1.5 w-full rounded-full bg-white/10 overflow-hidden">
-              <div className="h-full rounded-full bg-ps-warning" style={{ width: `${(totalSpent / (ALL_HISTORY.length * 4 * 2.5)) * 100}%` }} />
+              <div className="h-full rounded-full bg-ps-warning" style={{ width: `${Math.min(100, (totalSpent / Math.max(history.length * 4 * 2.5, 1)) * 100)}%` }} />
             </div>
           </div>
         </div>
@@ -211,7 +219,11 @@ export default function HistoryPage() {
             </button>
           </div>
 
-          {pageItems.length === 0 ? (
+          {loading ? (
+            <p className="text-ps-text-muted text-sm">Loading history…</p>
+          ) : error ? (
+            <p className="text-ps-occupied text-sm">{error}</p>
+          ) : pageItems.length === 0 ? (
             <div className="ps-card p-12 flex flex-col items-center text-center animate-fade-in">
               <CalendarX className="text-ps-text-muted mb-4" size={40} strokeWidth={1.5} />
               <h3 className="text-white font-semibold text-lg">No history found for the selected dates</h3>
@@ -242,7 +254,7 @@ export default function HistoryPage() {
                     <tbody>
                       {pageItems.map((r, i) => (
                         <tr
-                          key={`${r.spotId}-${i}`}
+                          key={r.id}
                           className="border-b border-ps-primary/10 last:border-0 hover:bg-white/[0.03] ps-transition relative"
                           style={{ backgroundColor: i % 2 === 0 ? '#1A1A2E' : '#16162A' }}
                         >
@@ -271,7 +283,7 @@ export default function HistoryPage() {
               <div className="md:hidden flex flex-col gap-3">
                 {pageItems.map((r, i) => (
                   <div
-                    key={`${r.spotId}-${i}`}
+                    key={r.id}
                     className="ps-card p-4 animate-fade-in"
                     style={{ animationDelay: `${Math.min(i * 40, 300)}ms` }}
                   >
@@ -345,8 +357,8 @@ export default function HistoryPage() {
           <div className="flex items-center gap-3 ps-card px-4 py-3" style={{ borderColor: 'rgba(108,99,255,0.4)' }}>
             <Download className="text-ps-primary" size={20} />
             <div>
-              <p className="text-white text-sm font-semibold">Export coming soon!</p>
-              <p className="text-ps-text-muted text-xs">CSV export is on the way.</p>
+              <p className="text-white text-sm font-semibold">Nothing to export</p>
+              <p className="text-ps-text-muted text-xs">Complete a booking first.</p>
             </div>
           </div>
         </div>

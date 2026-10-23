@@ -1,6 +1,8 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import axios from 'axios';
 import Navbar from '@/components/Navbar';
 import StatsBar from '@/components/StatsBar';
 import FilterBar, { type FilterKey } from '@/components/FilterBar';
@@ -8,35 +10,58 @@ import ParkingGrid from '@/components/ParkingGrid';
 import BookingModal from '@/components/BookingModal';
 import RecentActivity from '@/components/RecentActivity';
 import Footer from '@/components/Footer';
-import { parkingSpots } from '@/lib/parkingData';
-import type { Booking, ParkingSpot } from '@/lib/types';
+import { mapBooking, mapSlotToSpot } from '@/lib/mappers';
+import type { ApiBooking, ApiSlot, Booking, ParkingSpot } from '@/lib/types';
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [filter, setFilter] = useState<FilterKey>('all');
   const [query, setQuery] = useState('');
   const [modalSpot, setModalSpot] = useState<ParkingSpot | null>(null);
   const [bookings, setBookings] = useState<Booking[]>([]);
-  const [spots, setSpots] = useState<ParkingSpot[]>(parkingSpots);
+  const [spots, setSpots] = useState<ParkingSpot[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const loadData = useCallback(async () => {
+    setError('');
+    try {
+      const [slotsRes, bookingsRes] = await Promise.all([
+        axios.get('/api/parking-slots'),
+        axios.get('/api/bookings'),
+      ]);
+
+      const apiSlots = (slotsRes.data.slots || []) as ApiSlot[];
+      setSpots(apiSlots.map(mapSlotToSpot));
+
+      const apiBookings = (bookingsRes.data.bookings || []) as ApiBooking[];
+      setBookings(apiBookings.map(mapBooking));
+    } catch (e: unknown) {
+      if (axios.isAxiosError(e) && e.response?.status === 401) {
+        router.push('/login');
+        return;
+      }
+      setError(
+        axios.isAxiosError(e) && e.response?.data?.message
+          ? String(e.response.data.message)
+          : 'Failed to load parking data'
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [router]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const activeBooking = useMemo(
     () => bookings.find((b) => b.status === 'active') ?? null,
     [bookings]
   );
 
-  function handleConfirm(spot: ParkingSpot, duration: number, cost: number) {
-    setSpots((prev) =>
-      prev.map((s) =>
-        s.id === spot.id ? { ...s, status: 'reserved' as const } : s
-      )
-    );
-    const booking: Booking = {
-      spotId: spot.id,
-      date: new Date().toLocaleDateString(),
-      duration,
-      cost,
-      status: 'active',
-    };
-    setBookings((prev) => [booking, ...prev]);
+  function handleConfirm(_spot: ParkingSpot, _duration: number, _cost: number) {
+    loadData();
   }
 
   return (
@@ -44,12 +69,10 @@ export default function DashboardPage() {
       <Navbar />
 
       <main className="pt-16 max-w-7xl mx-auto px-4 sm:px-6 pb-10">
-        {/* Hero */}
         <section
           className="relative overflow-hidden rounded-card mt-4 px-6 py-8 sm:py-10"
           style={{
-            background:
-              'linear-gradient(180deg, #1A1A2E 0%, #0F0F1A 100%)',
+            background: 'linear-gradient(180deg, #1A1A2E 0%, #0F0F1A 100%)',
           }}
         >
           <div
@@ -84,23 +107,32 @@ export default function DashboardPage() {
         </section>
 
         <div className="mt-6 space-y-8">
-          <StatsBar spots={spots} activeBooking={activeBooking} />
+          {error && (
+            <p className="text-ps-occupied text-sm">{error}</p>
+          )}
+          {loading ? (
+            <p className="text-ps-text-muted text-sm">Loading parking data…</p>
+          ) : (
+            <>
+              <StatsBar spots={spots} activeBooking={activeBooking} />
 
-          <FilterBar
-            active={filter}
-            onChange={setFilter}
-            query={query}
-            onQuery={setQuery}
-          />
+              <FilterBar
+                active={filter}
+                onChange={setFilter}
+                query={query}
+                onQuery={setQuery}
+              />
 
-          <ParkingGrid
-            spots={spots}
-            filter={filter}
-            query={query}
-            onBook={(s) => setModalSpot(s)}
-          />
+              <ParkingGrid
+                spots={spots}
+                filter={filter}
+                query={query}
+                onBook={(s) => setModalSpot(s)}
+              />
 
-          <RecentActivity bookings={bookings} />
+              <RecentActivity bookings={bookings.slice(0, 8)} />
+            </>
+          )}
         </div>
       </main>
 

@@ -23,31 +23,25 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setError('');
+    setSubmitting(true);
 
     try {
-      setSubmitting(true);
-
-      const response = await axios.post("/api/login",
-        {
-          email,
-          password
-        }
-      );
-
-      console.log(response);
-
-      router.push('/dashboard');
-
-    } catch (error) {
-      console.log(error);
-      // toast message
+      await axios.post('/api/login', { email, password });
+      router.replace('/dashboard');
+    } catch (err: unknown) {
+      const msg =
+        axios.isAxiosError(err) && err.response?.data?.message
+          ? String(err.response.data.message)
+          : 'Login failed';
+      setError(msg);
+    } finally {
+      setSubmitting(false);
     }
-
-    setSubmitting(false);
-
   }
 
   return (
@@ -60,6 +54,10 @@ export default function LoginPage() {
           <h1 className="text-white font-bold text-[22px]">ParkSense AI</h1>
           <p className="text-ps-text-muted text-[13px] mt-1">
             Smart parking for smarter cities
+          </p>
+          <p className="text-ps-text-muted text-[11px] mt-3">
+            Test account: <span className="text-white">test@example.com</span> /{' '}
+            <span className="text-white">password</span>
           </p>
         </div>
 
@@ -101,6 +99,10 @@ export default function LoginPage() {
             </Link>
           </div>
 
+          {error && (
+            <p className="text-ps-occupied text-xs">{error}</p>
+          )}
+
           <button
             type="submit"
             disabled={submitting}
@@ -118,8 +120,8 @@ export default function LoginPage() {
 
         <button
           type="button"
-          onClick={() => router.push('/dashboard')}
-          className="w-full h-12 rounded-btn bg-ps-card-2 border border-white/10 flex items-center justify-center gap-3 text-white text-sm font-medium hover:border-ps-primary/50 hover:bg-[#23234a] ps-transition"
+          disabled
+          className="w-full h-12 rounded-btn bg-ps-card-2 border border-white/10 flex items-center justify-center gap-3 text-white text-sm font-medium opacity-50 cursor-not-allowed"
         >
           <GoogleIcon />
           Continue with Google

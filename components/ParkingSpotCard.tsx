@@ -10,7 +10,7 @@ interface Props {
 
 const STATUS_META = {
   available: {
-    label: 'Available',
+    label: 'Free',
     badge: 'bg-[rgba(0,217,126,0.15)] text-ps-available',
     car: 'text-ps-available',
     btn: 'bg-ps-available/15 text-ps-available hover:bg-ps-available hover:text-ps-bg hover:ps-green-glow',
@@ -18,19 +18,11 @@ const STATUS_META = {
     disabled: false,
   },
   occupied: {
-    label: 'Occupied',
+    label: 'Booked',
     badge: 'bg-[rgba(255,77,79,0.15)] text-ps-occupied',
     car: 'text-ps-text-muted',
     btn: 'bg-white/5 text-ps-text-muted cursor-not-allowed',
-    btnLabel: 'Occupied',
-    disabled: true,
-  },
-  reserved: {
-    label: 'Reserved',
-    badge: 'bg-[rgba(255,184,0,0.15)] text-ps-warning',
-    car: 'text-ps-warning',
-    btn: 'bg-ps-warning/15 text-ps-warning cursor-not-allowed',
-    btnLabel: 'Reserved',
+    btnLabel: 'Booked',
     disabled: true,
   },
 } as const;

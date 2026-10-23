@@ -11,11 +11,13 @@ import {
   User as UserIcon,
   LogOut,
   CalendarCheck,
+  Car,
 } from 'lucide-react';
 import axios from 'axios';
 
 const NAV_LINKS = [
   { href: '/dashboard', label: 'Dashboard' },
+  { href: '/vehicles', label: 'Vehicles' },
   { href: '/my-bookings', label: 'My Bookings' },
   { href: '/history', label: 'History' },
 ];
@@ -39,8 +41,6 @@ export default function Navbar() {
     try {
       const response = await axios.get("/api/me");
 
-      console.log(response);
-
       if (response.data?.name && response.data?.email) {
         setName(response.data?.name);
         setEmail(response.data?.email);
@@ -62,10 +62,17 @@ export default function Navbar() {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  function logout() {
+  async function logout() {
     setMenuOpen(false);
     setDrawerOpen(false);
-    router.push('/login');
+    setName('');
+    setEmail('');
+    try {
+      await axios.post('/api/logout');
+    } catch {
+      // Cookie is cleared server-side even if Laravel is unreachable
+    }
+    router.replace('/login');
   }
 
   return (
@@ -119,7 +126,7 @@ export default function Navbar() {
               className="w-10 h-10 rounded-full bg-gradient-to-br from-ps-primary to-ps-primary-hover text-white font-semibold flex items-center justify-center ps-transition hover:ps-glow"
               aria-label="Account menu"
             >
-              {name[0] ?? "JD"}
+              {name[0]?.toUpperCase() ?? '?'}
             </button>
             {menuOpen && (
               <>
@@ -133,6 +140,9 @@ export default function Navbar() {
                   </div>
                   <Link href="/dashboard" onClick={() => setMenuOpen(false)} className="flex items-center gap-2 px-3 py-2 text-sm text-ps-text-muted hover:text-white hover:bg-white/5 rounded-md ps-transition">
                     <UserIcon size={15} /> Profile
+                  </Link>
+                  <Link href="/vehicles" onClick={() => setMenuOpen(false)} className="flex items-center gap-2 px-3 py-2 text-sm text-ps-text-muted hover:text-white hover:bg-white/5 rounded-md ps-transition">
+                    <Car size={15} /> Vehicles
                   </Link>
                   <Link href="/my-bookings" onClick={() => setMenuOpen(false)} className="flex items-center gap-2 px-3 py-2 text-sm text-ps-text-muted hover:text-white hover:bg-white/5 rounded-md ps-transition">
                     <CalendarCheck size={15} /> My Bookings

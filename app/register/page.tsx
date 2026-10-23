@@ -35,6 +35,7 @@ export default function RegisterPage() {
   const [showPw, setShowPw] = useState(false);
   const [showCp, setShowCp] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
 
   const score = useMemo(() => strengthOf(password), [password]);
   const strengthLabel =
@@ -45,30 +46,39 @@ export default function RegisterPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (password !== confirm) return;
+    if (password !== confirm) {
+      setError('Passwords do not match');
+      return;
+    }
+    setError('');
+    setSubmitting(true);
 
     try {
-      setSubmitting(true);
-
-      const response = await axios.post("/api/register",
-        {
-          name,
-          email,
-          password,
-          password_confirmation: confirm
-        }
-      );
-
-      console.log(response);
-
-      router.push('/dashboard');
-
-    } catch (error) {
-      console.log(error);
-      // toast message
+      await axios.post('/api/register', {
+        name,
+        email,
+        password,
+        password_confirmation: confirm,
+      });
+      router.replace('/dashboard');
+    } catch (err: unknown) {
+      let msg = 'Registration failed';
+      if (axios.isAxiosError(err)) {
+        const data = err.response?.data as {
+          message?: string;
+          errors?: Record<string, string[]>;
+        };
+        const fieldError =
+          data?.errors?.email?.[0] ||
+          data?.errors?.password?.[0] ||
+          data?.errors?.name?.[0];
+        if (fieldError) msg = fieldError;
+        else if (data?.message) msg = String(data.message);
+      }
+      setError(msg);
+    } finally {
+      setSubmitting(false);
     }
-
-    setSubmitting(false);
   }
 
   return (
@@ -114,7 +124,8 @@ export default function RegisterPage() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Password"
+                placeholder="Password (min 8 characters)"
+                minLength={8}
                 className="ps-input w-full h-12 pl-10 pr-10 text-white placeholder:text-ps-text-muted text-sm"
               />
               <button
@@ -161,10 +172,14 @@ export default function RegisterPage() {
           </div>
 
           <p className="text-ps-text-muted text-[11px] leading-relaxed">
-            By creating an account you agree to our{' '}
+            Password must be at least 8 characters. By creating an account you agree to our{' '}
             <span className="text-ps-primary">Terms of Service</span> and{' '}
             <span className="text-ps-primary">Privacy Policy</span>
           </p>
+
+          {error && (
+            <p className="text-ps-occupied text-xs">{error}</p>
+          )}
 
           <button
             type="submit"
@@ -183,8 +198,8 @@ export default function RegisterPage() {
 
         <button
           type="button"
-          onClick={() => router.push('/dashboard')}
-          className="w-full h-12 rounded-btn bg-ps-card-2 border border-white/10 flex items-center justify-center gap-3 text-white text-sm font-medium hover:border-ps-primary/50 hover:bg-[#23234a] ps-transition"
+          disabled
+          className="w-full h-12 rounded-btn bg-ps-card-2 border border-white/10 flex items-center justify-center gap-3 text-white text-sm font-medium opacity-50 cursor-not-allowed"
         >
           <GoogleIcon />
           Sign up with Google
