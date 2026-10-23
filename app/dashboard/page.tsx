@@ -13,6 +13,8 @@ import Footer from '@/components/Footer';
 import { mapBooking, mapSlotToSpot } from '@/lib/mappers';
 import type { ApiBooking, ApiSlot, Booking, ParkingSpot } from '@/lib/types';
 
+const POLL_INTERVAL_MS = 100;
+
 export default function DashboardPage() {
   const router = useRouter();
   const [filter, setFilter] = useState<FilterKey>('all');
@@ -21,10 +23,11 @@ export default function DashboardPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [spots, setSpots] = useState<ParkingSpot[]>([]);
   const [loading, setLoading] = useState(true);
+  const [cancelling, setCancelling] = useState(false);
   const [error, setError] = useState('');
 
-  const loadData = useCallback(async () => {
-    setError('');
+  const loadData = useCallback(async (silent = false) => {
+    if (!silent) setError('');
     try {
       const [slotsRes, bookingsRes] = await Promise.all([
         axios.get('/api/parking-slots'),
@@ -41,11 +44,13 @@ export default function DashboardPage() {
         router.push('/login');
         return;
       }
-      setError(
-        axios.isAxiosError(e) && e.response?.data?.message
-          ? String(e.response.data.message)
-          : 'Failed to load parking data'
-      );
+      if (!silent) {
+        setError(
+          axios.isAxiosError(e) && e.response?.data?.message
+            ? String(e.response.data.message)
+            : 'Failed to load parking data'
+        );
+      }
     } finally {
       setLoading(false);
     }
@@ -53,6 +58,8 @@ export default function DashboardPage() {
 
   useEffect(() => {
     loadData();
+    const id = setInterval(() => loadData(true), POLL_INTERVAL_MS);
+    return () => clearInterval(id);
   }, [loadData]);
 
   const activeBooking = useMemo(
@@ -62,6 +69,27 @@ export default function DashboardPage() {
 
   function handleConfirm(_spot: ParkingSpot, _duration: number, _cost: number) {
     loadData();
+  }
+
+  async function handleCancelBooking(booking: Booking) {
+    setCancelling(true);
+    setError('');
+    try {
+      await axios.post(`/api/booking/${booking.id}/close`);
+      loadData();
+    } catch (e: unknown) {
+      if (axios.isAxiosError(e) && e.response?.status === 401) {
+        router.push('/login');
+        return;
+      }
+      setError(
+        axios.isAxiosError(e) && e.response?.data?.message
+          ? String(e.response.data.message)
+          : 'Failed to cancel booking'
+      );
+    } finally {
+      setCancelling(false);
+    }
   }
 
   return (
@@ -114,7 +142,12 @@ export default function DashboardPage() {
             <p className="text-ps-text-muted text-sm">Loading parking data…</p>
           ) : (
             <>
-              <StatsBar spots={spots} activeBooking={activeBooking} />
+              <StatsBar
+                spots={spots}
+                activeBooking={activeBooking}
+                onCancel={activeBooking ? () => handleCancelBooking(activeBooking) : undefined}
+                cancelling={cancelling}
+              />
 
               <FilterBar
                 active={filter}
@@ -128,6 +161,9 @@ export default function DashboardPage() {
                 filter={filter}
                 query={query}
                 onBook={(s) => setModalSpot(s)}
+                onCancel={handleCancelBooking}
+                cancelling={cancelling}
+                userBookings={bookings}
               />
 
               <RecentActivity bookings={bookings.slice(0, 8)} />

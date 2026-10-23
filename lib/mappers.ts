@@ -17,7 +17,8 @@ export function parseZoneAndFloor(name: string): { zone: string; floor: number }
 }
 
 function normalizeSpotStatus(status: string): SpotStatus {
-  return status === 'occupied' ? 'occupied' : 'available';
+  const s = status?.toLowerCase();
+  return s === 'available' || s === 'open' || s === 'free' ? 'available' : 'occupied';
 }
 
 export function mapSlotToSpot(slot: ApiSlot): ParkingSpot {

@@ -1,12 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { CircleCheck, CircleX, CalendarClock } from 'lucide-react';
+import { CircleCheck, CircleX, CalendarClock, X } from 'lucide-react';
 import type { ParkingSpot, Booking } from '@/lib/types';
 
 interface Props {
   spots: ParkingSpot[];
   activeBooking: Booking | null;
+  onCancel?: () => void;
+  cancelling?: boolean;
 }
 
 function useCountUp(target: number, duration = 800) {
@@ -51,7 +53,7 @@ function CountdownTimer({ until }: { until: string | null }) {
   );
 }
 
-export default function StatsBar({ spots, activeBooking }: Props) {
+export default function StatsBar({ spots, activeBooking, onCancel, cancelling }: Props) {
   const available = spots.filter((s) => s.status === 'available').length;
   const occupied = spots.filter((s) => s.status === 'occupied').length;
   const total = spots.length;
@@ -111,12 +113,25 @@ export default function StatsBar({ spots, activeBooking }: Props) {
           </div>
           <CalendarClock className="text-ps-primary" size={22} />
         </div>
-        <div className="mt-4">
+        <div className="mt-4 flex items-center justify-between gap-3">
           {activeBooking ? (
-            <div className="flex items-center gap-2">
-              <span className="text-ps-text-muted text-xs">Time left</span>
-              <CountdownTimer until={activeBooking.exitTime} />
-            </div>
+            <>
+              <div className="flex items-center gap-2">
+                <span className="text-ps-text-muted text-xs">Time left</span>
+                <CountdownTimer until={activeBooking.exitTime} />
+              </div>
+              {onCancel && (
+                <button
+                  type="button"
+                  onClick={onCancel}
+                  disabled={cancelling}
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-ps-occupied hover:text-white bg-ps-occupied/10 hover:bg-ps-occupied/80 border border-ps-occupied/30 rounded-pill px-3 py-1.5 ps-transition disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <X size={14} />
+                  {cancelling ? 'Cancelling…' : 'Cancel'}
+                </button>
+              )}
+            </>
           ) : (
             <p className="text-ps-text-muted text-[11px]">Reserve a spot to begin a session</p>
           )}
